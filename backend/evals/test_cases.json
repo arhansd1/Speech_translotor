@@ -1,0 +1,162 @@
+[
+  {
+    "id": "tc_001",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "नमस्ते, आप कैसे हैं?",
+    "expected_translation": "Hello, how are you?",
+    "domain": "general"
+  },
+  {
+    "id": "tc_002",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "मुझे बुखार और सिरदर्द है।",
+    "expected_translation": "I have fever and headache.",
+    "domain": "medical"
+  },
+  {
+    "id": "tc_003",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "कृपया मुझे स्टेशन का रास्ता बताएं।",
+    "expected_translation": "Please tell me the way to the station.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_004",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "मेरा बैंक खाता बंद हो गया है।",
+    "expected_translation": "My bank account has been closed.",
+    "domain": "finance"
+  },
+  {
+    "id": "tc_005",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "इस दवाई को खाने के बाद लें।",
+    "expected_translation": "Take this medicine after eating.",
+    "domain": "medical"
+  },
+  {
+    "id": "tc_006",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "अदालत में सुनवाई कल होगी।",
+    "expected_translation": "The court hearing will be tomorrow.",
+    "domain": "legal"
+  },
+  {
+    "id": "tc_007",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "बिजली का बिल कब तक भरना है?",
+    "expected_translation": "When is the electricity bill due?",
+    "domain": "general"
+  },
+  {
+    "id": "tc_008",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "मशीन लर्निंग एक उन्नत तकनीक है।",
+    "expected_translation": "Machine learning is an advanced technology.",
+    "domain": "technology"
+  },
+  {
+    "id": "tc_009",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "आज मौसम बहुत अच्छा है।",
+    "expected_translation": "The weather is very nice today.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_010",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "उच्च रक्तचाप के कारण डॉक्टर के पास जाना पड़ा।",
+    "expected_translation": "Had to visit the doctor due to hypertension.",
+    "domain": "medical"
+  },
+  {
+    "id": "tc_011",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "म्युचुअल फंड में निवेश जोखिम भरा हो सकता है।",
+    "expected_translation": "Investing in mutual funds can be risky.",
+    "domain": "finance"
+  },
+  {
+    "id": "tc_012",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "शपथ पत्र जमा करना अनिवार्य है।",
+    "expected_translation": "Submitting an affidavit is mandatory.",
+    "domain": "legal"
+  },
+  {
+    "id": "tc_013",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "मेरे बच्चे की परीक्षा अगले महीने है।",
+    "expected_translation": "My child's exam is next month.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_014",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "सरकार ने नई नीति की घोषणा की।",
+    "expected_translation": "The government announced a new policy.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_015",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "कृत्रिम बुद्धिमत्ता भविष्य की तकनीक है।",
+    "expected_translation": "Artificial intelligence is the technology of the future.",
+    "domain": "technology"
+  },
+  {
+    "id": "tc_016",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "इस साल बारिश बहुत कम हुई है।",
+    "expected_translation": "There has been very little rain this year.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_017",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "रोगी को अस्पताल में भर्ती किया गया।",
+    "expected_translation": "The patient was admitted to the hospital.",
+    "domain": "medical"
+  },
+  {
+    "id": "tc_018",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "ऑनलाइन शॉपिंग बहुत लोकप्रिय हो गई है।",
+    "expected_translation": "Online shopping has become very popular.",
+    "domain": "general"
+  },
+  {
+    "id": "tc_019",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "न्यायालय ने निषेधाज्ञा जारी की।",
+    "expected_translation": "The court issued an injunction.",
+    "domain": "legal"
+  },
+  {
+    "id": "tc_020",
+    "source_lang": "hi-IN",
+    "target_lang": "en-IN",
+    "source_text": "मधुमेह के रोगियों को चीनी से बचना चाहिए।",
+    "expected_translation": "Diabetes patients should avoid sugar.",
+    "domain": "medical"
+  }
+]
