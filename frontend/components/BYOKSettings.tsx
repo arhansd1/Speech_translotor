@@ -25,59 +25,55 @@ export default function BYOKSettings({ currentKey, onSave, onClear }: BYOKSettin
   }
 
   return (
-    <div className="mx-6 mt-4 bg-sarvam-panel border border-sarvam-border rounded-lg p-4 animate-fade-in">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-white mb-1.5">
-            Your Sarvam API Key
-          </label>
-          <p className="text-xs text-sarvam-muted mb-3">
-            Get a free key at{" "}
-            <a
-              href="https://dashboard.sarvam.ai"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sarvam-orange underline"
-            >
-              dashboard.sarvam.ai
-            </a>{" "}
-            (₹100 free credit, no card required). Stored only in your browser — never sent to our servers.
-          </p>
+    <div className="mx-6 mt-4 border border-terminal-border p-4 animate-fade-in">
+      <div className="flex flex-col gap-3">
+        <label className="label-mono">YOUR SARVAM API KEY</label>
+        <p className="text-[11px] font-mono text-terminal-muted">
+          Get a free key at{" "}
+          <a
+            href="https://dashboard.sarvam.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-terminal-orange underline"
+          >
+            dashboard.sarvam.ai
+          </a>{" "}
+          (₹100 free credit, no card required). Stored only in your browser.
+        </p>
 
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type={showKey ? "text" : "password"}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="sk_live_..."
-                className="w-full bg-sarvam-dark border border-sarvam-border rounded-md px-3 py-2 text-sm text-white placeholder-sarvam-muted focus:outline-none focus:border-sarvam-orange"
-                onKeyDown={(e) => e.key === "Enter" && handleSave()}
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-sarvam-muted hover:text-white"
-              >
-                {showKey ? "Hide" : "Show"}
-              </button>
-            </div>
+        <div className="flex gap-2 mt-2">
+          <div className="relative flex-1">
+            <input
+              type={showKey ? "text" : "password"}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="sk_live_..."
+              className="w-full bg-terminal-panel border border-terminal-border px-3 py-2 text-[11px] font-mono text-terminal-bright placeholder-terminal-muted focus:outline-none focus:border-terminal-orange"
+              onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            />
             <button
-              onClick={handleSave}
-              disabled={input.trim().length < 10}
-              className="bg-sarvam-orange text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-orange-600 transition-colors"
+              type="button"
+              onClick={() => setShowKey((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-terminal-muted hover:text-terminal-bright"
             >
-              Save
+              {showKey ? "HIDE" : "SHOW"}
             </button>
-            {currentKey && (
-              <button
-                onClick={onClear}
-                className="border border-sarvam-border text-sarvam-muted px-3 py-2 rounded-md text-sm hover:text-white hover:border-white/40 transition-colors"
-              >
-                Clear
-              </button>
-            )}
           </div>
+          <button
+            onClick={handleSave}
+            disabled={input.trim().length < 10}
+            className="bg-terminal-orange text-terminal-bg px-4 py-2 text-[11px] font-mono uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 transition-opacity"
+          >
+            Save
+          </button>
+          {currentKey && (
+            <button
+              onClick={onClear}
+              className="border border-terminal-border text-terminal-muted px-3 py-2 text-[11px] font-mono uppercase tracking-wider hover:text-terminal-bright hover:border-terminal-bright transition-colors"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
     </div>

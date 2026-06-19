@@ -34,56 +34,69 @@ export default function PanelAudio({
   }, [audioUrl])
 
   return (
-    <div className="panel-card flex-1 min-h-[280px]">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-sarvam-muted uppercase tracking-wide">
-          Audio Output
-        </h2>
-        <span className="text-xs text-sarvam-muted">RHS</span>
-      </div>
-
+    <div className="w-full max-w-md">
       {audioUrl && ttsAvailable ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 py-6 animate-fade-in">
-          {/* Speaker icon — pulses while playing */}
-          <div
-            className={`w-16 h-16 rounded-full bg-sarvam-orange/20 flex items-center justify-center ${
-              isPlaying ? "animate-pulse" : ""
-            }`}
+        <div className="border border-terminal-border flex items-center">
+          {/* Play/pause button */}
+          <button
+            onClick={() => {
+              if (audioRef.current) {
+                if (isPlaying) {
+                  audioRef.current.pause()
+                } else {
+                  audioRef.current.play()
+                }
+              }
+            }}
+            className="w-10 h-10 flex items-center justify-center border-r border-terminal-border hover:bg-terminal-panel transition-colors"
           >
-            <svg className="w-8 h-8 text-sarvam-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5L6 9H2v6h4l5 4V5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" />
-            </svg>
+            {isPlaying ? (
+              <svg className="w-4 h-4 text-terminal-bright" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 text-terminal-bright" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
+          </button>
+
+          {/* Status label */}
+          <span className="flex-1 px-4 text-[11px] font-mono text-terminal-muted">
+            {isPlaying ? "PLAYING..." : "READY"}
+          </span>
+
+          {/* Waveform indicator */}
+          <div className="flex items-center gap-0.5 px-3">
+            <div className={`w-1 h-3 ${isPlaying ? 'bg-terminal-orange animate-pulse' : 'bg-terminal-muted'}`} />
+            <div className={`w-1 h-5 ${isPlaying ? 'bg-terminal-orange animate-pulse' : 'bg-terminal-muted'}`} style={{ animationDelay: '0.1s' }} />
+            <div className={`w-1 h-4 ${isPlaying ? 'bg-terminal-orange animate-pulse' : 'bg-terminal-muted'}`} style={{ animationDelay: '0.2s' }} />
+            <div className={`w-1 h-6 ${isPlaying ? 'bg-terminal-orange animate-pulse' : 'bg-terminal-muted'}`} style={{ animationDelay: '0.3s' }} />
+            <div className={`w-1 h-3 ${isPlaying ? 'bg-terminal-orange animate-pulse' : 'bg-terminal-muted'}`} style={{ animationDelay: '0.4s' }} />
           </div>
 
+          {/* Hidden audio element */}
           <audio
             ref={audioRef}
             src={audioUrl}
-            controls
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => setIsPlaying(false)}
-            className="w-full"
+            className="hidden"
           />
-
-          <p className="text-xs text-sarvam-muted">
-            Spoken in {targetLanguageName || "target language"}
-          </p>
         </div>
       ) : ttsError ? (
-        <div className="flex-1 flex items-center justify-center text-center text-amber-400 text-sm py-12 px-2">
+        <div className="border border-terminal-border px-4 py-3 text-[11px] font-mono text-terminal-orange">
           {ttsError}
         </div>
       ) : !ttsAvailable && targetLanguageName ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center gap-2 py-12 px-2">
-          <span className="text-sarvam-muted text-sm">
-            Audio playback isn&apos;t available for {targetLanguageName} yet.
-          </span>
-          <span className="text-xs text-sarvam-muted/70">Translation text is still shown in the middle panel.</span>
+        <div className="border border-terminal-border px-4 py-3 text-[11px] font-mono text-terminal-muted">
+          Audio not available for {targetLanguageName}
         </div>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-sarvam-muted text-sm py-12">
-          Audio will play here
+        <div className="border border-terminal-border px-4 py-3 text-[11px] font-mono text-terminal-muted">
+          WAITING FOR SYNTHESIS
         </div>
       )}
     </div>

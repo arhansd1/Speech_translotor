@@ -10,16 +10,23 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useAudioRecorder } from "@/hooks/useAudioRecorder"
 import { translateAudio, base64ToAudioUrl, fetchLanguages, Language } from "@/lib/api"
-import LanguageSelector from "./LanguageSelector"
 import PushToTalkButton from "./PushToTalkButton"
-import StatusBar, { PipelineStage } from "./StatusBar"
-import PanelDetected from "./PanelDetected"
-import PanelTranslation from "./PanelTranslation"
 import PanelAudio from "./PanelAudio"
+
+type PipelineStage =
+  | "idle"
+  | "uploading"
+  | "transcribing"
+  | "translating"
+  | "speaking"
+  | "done"
+  | "error"
 
 interface TranslatorAppProps {
   apiKey?: string          // undefined = demo mode, string = BYOK mode
   mode: "demo" | "byok"
+  targetLanguage: string
+  onTargetLanguageChange: (lang: string) => void
 }
 
 function getOrCreateSessionId(mode: string): string {
@@ -33,10 +40,9 @@ function getOrCreateSessionId(mode: string): string {
   return sid
 }
 
-export default function TranslatorApp({ apiKey, mode }: TranslatorAppProps) {
+export default function TranslatorApp({ apiKey, mode, targetLanguage, onTargetLanguageChange }: TranslatorAppProps) {
   const { isRecording, volumeLevel, startRecording, stopRecording, error: micError } = useAudioRecorder()
 
-  const [targetLanguage, setTargetLanguage] = useState("ta-IN") // Default: Tamil
   const [languages, setLanguages] = useState<Language[]>([])
   const [stage, setStage] = useState<PipelineStage>("idle")
   const [sessionId, setSessionId] = useState("")
@@ -49,6 +55,7 @@ export default function TranslatorApp({ apiKey, mode }: TranslatorAppProps) {
   const [finalTranslation, setFinalTranslation] = useState<string | null>(null)
   const [agentReasoning, setAgentReasoning] = useState<string | null>(null)
   const [glossaryUsed, setGlossaryUsed] = useState(false)
+  const [showReasoning, setShowReasoning] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [ttsAvailable, setTtsAvailable] = useState(true)
   const [ttsError, setTtsError] = useState<string | null>(null)
@@ -130,55 +137,148 @@ export default function TranslatorApp({ apiKey, mode }: TranslatorAppProps) {
   }, [stopRecording, targetLanguage, sessionId, apiKey])
 
   return (
-    <div className="flex-1 flex flex-col gap-6 px-6 py-6 max-w-6xl mx-auto w-full">
-      {/* Controls row */}
-      <div className="flex items-center justify-between gap-6 bg-sarvam-panel border border-sarvam-border rounded-xl p-4">
-        <div className="w-56">
-          <LanguageSelector value={targetLanguage} onChange={setTargetLanguage} />
+    <div className="flex-1 flex flex-col h-[calc(100vh-3.5rem)]">
+      {/* Two-column split layout */}
+      <div className="flex-1 flex border-l border-terminal-border">
+        {/* Left panel - SOURCE */}
+        <div className="flex-1 flex flex-col border-r border-terminal-border">
+          {/* Top row with label and badge */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-terminal-border">
+            <span className="label-mono">01 · SOURCE</span>
+            <span className={`px-3 py-1 text-[10px] font-mono uppercase tracking-wider border ${
+              detectedLanguage 
+                ? "border-terminal-orange text-terminal-orange" 
+                : "border-terminal-muted text-terminal-muted"
+            }`}>
+              DETECTED · {detectedLanguage || "—"}
+            </span>
+          </div>
+
+          {/* Center - mic button */}
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6">
+            <PushToTalkButton
+              isRecording={isRecording}
+              volumeLevel={volumeLevel}
+              disabled={stage !== "idle" && stage !== "error"}
+              onPressStart={startRecording}
+              onPressEnd={handlePressEnd}
+            />
+
+            {/* Status line */}
+            {stage !== "idle" && stage !== "error" && (
+              <span className="text-[11px] font-mono text-terminal-orange uppercase tracking-wider">
+                {stage === "uploading" && "UPLOADING..."}
+                {stage === "transcribing" && "TRANSCRIBING..."}
+                {stage === "translating" && "TRANSLATING..."}
+                {stage === "speaking" && "GENERATING SPEECH..."}
+                {stage === "done" && "DONE"}
+              </span>
+            )}
+          </div>
+
+          {/* Bottom - transcript */}
+          <div className="border-t border-terminal-border px-6 py-4">
+            <span className="label-mono block mb-2">TRANSCRIPT ({detectedLanguage || "—"})</span>
+            {transcript ? (
+              <p className="body-text text-terminal-bright">
+                {transcript}
+              </p>
+            ) : (
+              <p className="body-text text-terminal-muted">
+                Hold the mic and speak...
+              </p>
+            )}
+          </div>
         </div>
 
-        <PushToTalkButton
-          isRecording={isRecording}
-          volumeLevel={volumeLevel}
-          disabled={stage !== "idle" && stage !== "error"}
-          onPressStart={startRecording}
-          onPressEnd={handlePressEnd}
-        />
+        {/* Right panel - TARGET */}
+        <div className="flex-1 flex flex-col">
+          {/* Top row with label and badge */}
+          <div className="flex items-center justify-between px-6 py-3 border-b border-terminal-border">
+            <span className="label-mono">02 · TARGET · {targetLanguage}</span>
+            <span className={`px-3 py-1 text-[10px] font-mono uppercase tracking-wider border ${
+              stage === "idle" || stage === "error"
+                ? "border-terminal-muted text-terminal-muted"
+                : stage === "done"
+                ? "border-terminal-mint text-terminal-mint"
+                : "border-terminal-orange text-terminal-orange"
+            }`}>
+              {stage === "idle" && "IDLE"}
+              {stage === "uploading" && "UPLOADING"}
+              {stage === "transcribing" && "TRANSCRIBING"}
+              {stage === "translating" && "TRANSLATING"}
+              {stage === "speaking" && "SPEAKING"}
+              {stage === "done" && "DONE"}
+              {stage === "error" && "ERROR"}
+            </span>
+          </div>
 
-        {/* Spacer to balance layout */}
-        <div className="w-56" />
+          {/* Center - audio player */}
+          <div className="flex-1 flex flex-col items-center justify-center px-6">
+            <PanelAudio
+              audioUrl={audioUrl}
+              ttsAvailable={ttsAvailable}
+              ttsError={ttsError}
+              targetLanguageName={targetLangObj?.name || null}
+            />
+          </div>
+
+          {/* Bottom - translation */}
+          <div className="border-t border-terminal-border px-6 py-4">
+            <span className="label-mono block mb-2">TRANSLATION</span>
+            {finalTranslation ? (
+              <p className="body-text text-terminal-bright">
+                {finalTranslation}
+              </p>
+            ) : (
+              <p className="body-text text-terminal-muted">
+                Translation will appear here...
+              </p>
+            )}
+            
+            {/* Agent reasoning and badges */}
+            {(agentReasoning || glossaryUsed) && (
+              <div className="mt-3 pt-3 border-t border-terminal-border flex flex-wrap items-center gap-2">
+                {glossaryUsed && (
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 border border-terminal-orange text-terminal-orange">
+                    Glossary applied
+                  </span>
+                )}
+                {agentReasoning && (
+                  <button
+                    onClick={() => setShowReasoning(prev => !prev)}
+                    className="text-[10px] font-mono text-terminal-muted hover:text-terminal-bright underline"
+                  >
+                    {showReasoning ? "Hide" : "Show"} agent trace
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Agent reasoning content */}
+            {showReasoning && agentReasoning && (
+              <div className="mt-3 p-3 border border-terminal-border bg-terminal-panel">
+                <p className="text-[11px] font-mono text-terminal-secondary leading-relaxed">
+                  {agentReasoning}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Error message overlay */}
       {micError && (
-        <div className="text-center text-sm text-red-400 bg-red-950/30 border border-red-800/40 rounded-lg px-4 py-2">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-[11px] font-mono text-terminal-orange border border-terminal-border px-4 py-2 bg-terminal-panel">
           {micError}
         </div>
       )}
 
-      <StatusBar stage={stage} errorMessage={errorMessage} />
-
-      {/* Three panels */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PanelDetected
-          detectedLanguage={detectedLanguage}
-          confidence={detectionConfidence}
-          transcript={transcript}
-          languageName={languages.find((l) => l.code === detectedLanguage)?.name || null}
-        />
-        <PanelTranslation
-          translatedText={finalTranslation}
-          rawTranslation={rawTranslation}
-          agentReasoning={agentReasoning}
-          glossaryUsed={glossaryUsed}
-          isProcessing={stage === "uploading" || stage === "transcribing" || stage === "translating"}
-        />
-        <PanelAudio
-          audioUrl={audioUrl}
-          ttsAvailable={ttsAvailable}
-          ttsError={ttsError}
-          targetLanguageName={targetLangObj?.name || null}
-        />
-      </div>
+      {errorMessage && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 text-[11px] font-mono text-terminal-orange border border-terminal-border px-4 py-2 bg-terminal-panel">
+          {errorMessage}
+        </div>
+      )}
     </div>
   )
 }

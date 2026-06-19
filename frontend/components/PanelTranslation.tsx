@@ -48,44 +48,44 @@ export default function PanelTranslation({
   const wasRefined = translatedText && rawTranslation && translatedText !== rawTranslation
 
   return (
-    <div className="panel-card flex-1 min-h-[280px]">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-sarvam-muted uppercase tracking-wide">
+    <div className="panel-card flex-1 min-h-[320px]">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
           Translation
         </h2>
-        <span className="text-xs text-sarvam-muted">Middle</span>
+        <span className="text-xs text-slate-500 font-medium">Middle</span>
       </div>
 
       {isProcessing && !translatedText && (
-        <div className="flex-1 flex items-center justify-center gap-1.5 py-12">
-          <span className="w-2 h-2 bg-sarvam-orange rounded-full animate-bounce [animation-delay:-0.3s]" />
-          <span className="w-2 h-2 bg-sarvam-orange rounded-full animate-bounce [animation-delay:-0.15s]" />
-          <span className="w-2 h-2 bg-sarvam-orange rounded-full animate-bounce" />
+        <div className="flex-1 flex items-center justify-center gap-2 py-16">
+          <span className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
+          <span className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
+          <span className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce" />
         </div>
       )}
 
       {translatedText ? (
-        <div className="flex flex-col gap-3 animate-fade-in">
-          <p className="translation-scroll text-white font-medium">
+        <div className="flex flex-col gap-4 animate-fade-in">
+          <p className="translation-scroll text-white font-semibold text-lg leading-relaxed">
             {words.slice(0, visibleWords).join(" ")}
             {visibleWords < words.length && <span className="opacity-50">▋</span>}
           </p>
 
-          <div className="flex flex-wrap items-center gap-2 mt-1 pt-3 border-t border-sarvam-border">
+          <div className="flex flex-wrap items-center gap-2 mt-1 pt-4 border-t border-slate-700/50">
             {wasRefined && (
-              <span className="text-[11px] text-purple-300 bg-purple-950/40 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] text-purple-300 bg-purple-950/40 border border-purple-800/50 px-3 py-1 rounded-full font-medium">
                 Agent-refined
               </span>
             )}
             {glossaryUsed && (
-              <span className="text-[11px] text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded-full">
+              <span className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/50 px-3 py-1 rounded-full font-medium">
                 Glossary applied
               </span>
             )}
             {agentReasoning && (
               <button
                 onClick={() => setShowReasoning((s) => !s)}
-                className="text-[11px] text-sarvam-muted underline hover:text-white ml-auto"
+                className="text-[11px] text-slate-400 underline hover:text-white ml-auto transition-colors"
               >
                 {showReasoning ? "Hide" : "Show"} agent trace
               </button>
@@ -93,14 +93,14 @@ export default function PanelTranslation({
           </div>
 
           {showReasoning && agentReasoning && (
-            <p className="text-[11px] text-sarvam-muted font-mono bg-sarvam-dark rounded-md p-2 border border-sarvam-border">
+            <p className="text-[11px] text-slate-400 font-mono bg-slate-900/50 rounded-lg p-3 border border-slate-700/50 leading-relaxed">
               {agentReasoning}
             </p>
           )}
         </div>
       ) : (
         !isProcessing && (
-          <div className="flex-1 flex items-center justify-center text-sarvam-muted text-sm py-12">
+          <div className="flex-1 flex items-center justify-center text-slate-500 text-sm py-16">
             Translation will appear here
           </div>
         )
