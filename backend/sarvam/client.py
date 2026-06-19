@@ -120,7 +120,7 @@ class SarvamClient:
             files = {"file": (audio_filename, audio_bytes, _mime_for(audio_filename))}
             data = {
                 "target_language_code": target_language_code,
-                "model": "saaras:v2",         # Saarika v2 — best quality for STT
+                "model": "saaras:v2.5",         # Saarika v2 — best quality for STT
                 "with_timestamps": "false",    # We don't need word-level timestamps
                 "with_diarization": "false",   # Single speaker
             }
