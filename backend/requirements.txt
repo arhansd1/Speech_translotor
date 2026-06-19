@@ -15,7 +15,7 @@ langsmith==0.1.147          # Automatic tracing when LANGCHAIN_API_KEY is set
 sacrebleu==2.4.3
 
 # Environment
-python-dotenv==1.0.1
+python-dotenv
 
 # Async utilities (used for sleep/gather in evals)
 # asyncio is stdlib — no install needed

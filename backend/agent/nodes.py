@@ -16,7 +16,7 @@ from sarvam.client import SarvamClient, SarvamError
 logger = logging.getLogger(__name__)
 
 SARVAM_LLM_BASE = "https://api.sarvam.ai"
-SARVAM_LLM_MODEL = "sarvam-m"   # Sarvam 105B — free per token during beta
+SARVAM_LLM_MODEL = "sarvam-105b"   # "sarvam-m" is legacy/deprecated and not in the current allowed model list
 
 
 # ─────────────────────────────────────────────
@@ -151,7 +151,7 @@ async def refine_translation(state: AgentState) -> dict:
         api_key = state["api_key"]
         async with httpx.AsyncClient(timeout=20.0) as client:
             resp = await client.post(
-                f"{SARVAM_LLM_BASE}/chat/completions",
+                f"{SARVAM_LLM_BASE}/v1/chat/completions",
                 headers={"api-subscription-key": api_key},
                 json={
                     "model": SARVAM_LLM_MODEL,

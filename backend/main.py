@@ -21,10 +21,15 @@ from contextlib import asynccontextmanager
 from typing import Optional
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, UploadFile, Header, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
+
+# CRITICAL: must run before anything reads os.environ (resolve_api_key, CORS origins, etc.)
+# Without this, .env is invisible to the process and SARVAM_API_KEY is always "".
+load_dotenv()
 
 from sarvam.client import SarvamClient, SarvamError
 from sarvam.languages import languages_as_dict
@@ -180,88 +185,105 @@ async def translate_audio(
     # Filename determines MIME type the Sarvam client sends
     filename = audio.filename or "recording.webm"
 
-    async with SarvamClient(api_key) as client:
-        # ── Step 1: STT + Translate ──────────────────────────────────────────
-        try:
-            stt_result = await client.stt_and_translate(
-                audio_bytes=audio_bytes,
-                audio_filename=filename,
-                target_language_code=target_language,
-            )
-        except SarvamError as e:
-            raise HTTPException(status_code=502, detail=f"STT+Translate failed: {e}")
-
-        transcript = stt_result["transcript"]
-        raw_translation = stt_result["translation"]
-        source_language = stt_result["source_language"]
-
-        # ── Step 2: Language ID (runs on transcript text) ────────────────────
-        try:
-            lang_id_result = await client.detect_language(transcript)
-            detected_language = lang_id_result["language_code"]
-            detection_confidence = lang_id_result["confidence"]
-        except SarvamError:
-            # Non-fatal — fall back to STT's detected language
-            detected_language = source_language
-            detection_confidence = 0.0
-
-        # ── Step 3: LangGraph agent ──────────────────────────────────────────
-        session_context = memory.get_context(sid)
-        agent_result = await run_agent(
-            raw_translation=raw_translation,
-            transcript=transcript,
-            source_language=source_language,
-            target_language=target_language,
-            session_context=session_context,
-            api_key=api_key,
-        )
-        final_translation = agent_result["final_translation"]
-
-        # ── Step 4: TTS ──────────────────────────────────────────────────────
-        audio_bytes_out = None
-        tts_error = None
-        from sarvam.languages import tts_supported
-        if tts_supported(target_language):
+    # Everything below is wrapped in one try/except. Without this, any exception
+    # NOT already caught as SarvamError/HTTPException (e.g. a bug inside run_agent,
+    # a KeyError, an httpx error type we didn't anticipate) propagates uncaught.
+    # In dev mode with --reload, an uncaught exception inside an `async with` block
+    # can tear the connection down before uvicorn writes any response at all —
+    # which is exactly what shows up in the browser as net::ERR_EMPTY_RESPONSE.
+    try:
+        async with SarvamClient(api_key) as client:
+            # ── Step 1: STT + Translate ──────────────────────────────────────
             try:
-                audio_bytes_out = await client.text_to_speech(
-                    text=final_translation,
-                    language_code=target_language,
+                stt_result = await client.stt_and_translate(
+                    audio_bytes=audio_bytes,
+                    audio_filename=filename,
+                    target_language_code=target_language,
                 )
             except SarvamError as e:
-                tts_error = str(e)
-                logger.warning(f"TTS failed (non-fatal): {e}")
+                raise HTTPException(status_code=502, detail=f"STT+Translate failed: {e}")
 
-    # ── Step 5: Update working memory ────────────────────────────────────────
-    memory.add_turn(sid, Turn(
-        source_text=transcript,
-        translated_text=final_translation,
-        source_lang=source_language,
-        target_lang=target_language,
-    ))
+            transcript = stt_result["transcript"]
+            raw_translation = stt_result["translation"]
+            source_language = stt_result["source_language"]
 
-    # ── Response ──────────────────────────────────────────────────────────────
-    import base64
-    response_body = {
-        "session_id": sid,
-        "transcript": transcript,
-        "raw_translation": raw_translation,
-        "final_translation": final_translation,
-        "detected_language": detected_language,
-        "detection_confidence": detection_confidence,
-        "source_language": source_language,
-        "target_language": target_language,
-        "tts_available": audio_bytes_out is not None,
-        "audio_base64": base64.b64encode(audio_bytes_out).decode() if audio_bytes_out else None,
-        "audio_format": "wav",
-        "agent_reasoning": agent_result.get("agent_reasoning", ""),
-        "glossary_used": agent_result.get("glossary_used", False),
-        "tts_error": tts_error,
-    }
+            # ── Step 2: Language ID (runs on transcript text) ────────────────
+            try:
+                lang_id_result = await client.detect_language(transcript)
+                detected_language = lang_id_result["language_code"]
+                detection_confidence = lang_id_result["confidence"]
+            except SarvamError:
+                # Non-fatal — fall back to STT's detected language
+                detected_language = source_language
+                detection_confidence = 0.0
 
-    response = JSONResponse(content=response_body)
-    response.headers["X-Agent-Reasoning"] = agent_result.get("agent_reasoning", "")[:500]
-    response.headers["X-Session-ID"] = sid
-    return response
+            # ── Step 3: LangGraph agent ───────────────────────────────────────
+            session_context = memory.get_context(sid)
+            agent_result = await run_agent(
+                raw_translation=raw_translation,
+                transcript=transcript,
+                source_language=source_language,
+                target_language=target_language,
+                session_context=session_context,
+                api_key=api_key,
+            )
+            final_translation = agent_result["final_translation"]
+
+            # ── Step 4: TTS ────────────────────────────────────────────────────
+            audio_bytes_out = None
+            tts_error = None
+            from sarvam.languages import tts_supported
+            if tts_supported(target_language):
+                try:
+                    audio_bytes_out = await client.text_to_speech(
+                        text=final_translation,
+                        language_code=target_language,
+                    )
+                except SarvamError as e:
+                    tts_error = str(e)
+                    logger.warning(f"TTS failed (non-fatal): {e}")
+
+        # ── Step 5: Update working memory ──────────────────────────────────────
+        memory.add_turn(sid, Turn(
+            source_text=transcript,
+            translated_text=final_translation,
+            source_lang=source_language,
+            target_lang=target_language,
+        ))
+
+        # ── Response ──────────────────────────────────────────────────────────────
+        import base64
+        response_body = {
+            "session_id": sid,
+            "transcript": transcript,
+            "raw_translation": raw_translation,
+            "final_translation": final_translation,
+            "detected_language": detected_language,
+            "detection_confidence": detection_confidence,
+            "source_language": source_language,
+            "target_language": target_language,
+            "tts_available": audio_bytes_out is not None,
+            "audio_base64": base64.b64encode(audio_bytes_out).decode() if audio_bytes_out else None,
+            "audio_format": "wav",
+            "agent_reasoning": agent_result.get("agent_reasoning", ""),
+            "glossary_used": agent_result.get("glossary_used", False),
+            "tts_error": tts_error,
+        }
+
+        response = JSONResponse(content=response_body)
+        response.headers["X-Agent-Reasoning"] = agent_result.get("agent_reasoning", "")[:500]
+        response.headers["X-Session-ID"] = sid
+        return response
+
+    except HTTPException:
+        # Already a clean, intentional error response — let FastAPI handle it as-is
+        raise
+    except Exception as e:
+        # Catch-all: log full traceback server-side, return clean JSON to the client
+        # instead of letting the connection die with no response at all.
+        logger.error(f"Unhandled error in /translate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+
 
 
 # ─────────────────────────────────────────────
@@ -287,65 +309,73 @@ async def translate_text(
     api_key = resolve_api_key(x_sarvam_key)
     sid = req.session_id or str(uuid.uuid4())
 
-    async with SarvamClient(api_key) as client:
-        # Translate
-        try:
-            resp = await client._client.post(
-                "/translate",
-                json={
-                    "input": req.text,
-                    "source_language_code": req.source_language,
-                    "target_language_code": req.target_language,
-                    "model": "mayura:v1",
-                    "enable_preprocessing": True,
-                },
-            )
-            if resp.status_code >= 400:
-                raise HTTPException(status_code=502, detail=f"Translate failed: {resp.text}")
-            raw_translation = resp.json().get("translated_text", "")
-        except SarvamError as e:
-            raise HTTPException(status_code=502, detail=str(e))
-
-        # Agent
-        session_context = memory.get_context(sid)
-        agent_result = await run_agent(
-            raw_translation=raw_translation,
-            transcript=req.text,
-            source_language=req.source_language,
-            target_language=req.target_language,
-            session_context=session_context,
-            api_key=api_key,
-        )
-        final_translation = agent_result["final_translation"]
-
-        # TTS
-        import base64
-        from sarvam.languages import tts_supported
-        audio_b64 = None
-        if tts_supported(req.target_language):
+    try:
+        async with SarvamClient(api_key) as client:
+            # Translate
             try:
-                audio_bytes = await client.text_to_speech(final_translation, req.target_language)
-                audio_b64 = base64.b64encode(audio_bytes).decode()
-            except SarvamError:
-                pass
+                resp = await client._client.post(
+                    "/translate",
+                    json={
+                        "input": req.text,
+                        "source_language_code": req.source_language,
+                        "target_language_code": req.target_language,
+                        "model": "mayura:v1",
+                        "enable_preprocessing": True,
+                    },
+                )
+                if resp.status_code >= 400:
+                    raise HTTPException(status_code=502, detail=f"Translate failed: {resp.text}")
+                raw_translation = resp.json().get("translated_text", "")
+            except SarvamError as e:
+                raise HTTPException(status_code=502, detail=str(e))
 
-    memory.add_turn(sid, Turn(
-        source_text=req.text,
-        translated_text=final_translation,
-        source_lang=req.source_language,
-        target_lang=req.target_language,
-    ))
+            # Agent
+            session_context = memory.get_context(sid)
+            agent_result = await run_agent(
+                raw_translation=raw_translation,
+                transcript=req.text,
+                source_language=req.source_language,
+                target_language=req.target_language,
+                session_context=session_context,
+                api_key=api_key,
+            )
+            final_translation = agent_result["final_translation"]
 
-    return {
-        "session_id": sid,
-        "input_text": req.text,
-        "raw_translation": raw_translation,
-        "final_translation": final_translation,
-        "tts_available": audio_b64 is not None,
-        "audio_base64": audio_b64,
-        "agent_reasoning": agent_result.get("agent_reasoning", ""),
-        "glossary_used": agent_result.get("glossary_used", False),
-    }
+            # TTS
+            import base64
+            from sarvam.languages import tts_supported
+            audio_b64 = None
+            if tts_supported(req.target_language):
+                try:
+                    audio_bytes = await client.text_to_speech(final_translation, req.target_language)
+                    audio_b64 = base64.b64encode(audio_bytes).decode()
+                except SarvamError:
+                    pass
+
+        memory.add_turn(sid, Turn(
+            source_text=req.text,
+            translated_text=final_translation,
+            source_lang=req.source_language,
+            target_lang=req.target_language,
+        ))
+
+        return {
+            "session_id": sid,
+            "input_text": req.text,
+            "raw_translation": raw_translation,
+            "final_translation": final_translation,
+            "tts_available": audio_b64 is not None,
+            "audio_base64": audio_b64,
+            "agent_reasoning": agent_result.get("agent_reasoning", ""),
+            "glossary_used": agent_result.get("glossary_used", False),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unhandled error in /translate/text: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal error: {e}")
+
 
 
 # ─────────────────────────────────────────────
