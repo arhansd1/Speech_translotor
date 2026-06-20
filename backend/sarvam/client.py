@@ -92,43 +92,43 @@ class SarvamClient:
             raise SarvamError(f"Network error during language detection: {e}")
 
     # ─────────────────────────────────────────────
-    # 2. STT + Translation (combined single call)
-    # Endpoint: POST /speech-to-text-translate
-    # Cost: ₹30 per hour of audio
-    # Why combined: saves one extra round-trip vs calling STT then translate separately.
-    # Input: audio file bytes (wav/mp3/webm), target language code
-    # Output: transcript in source language + translation in target language
+    # 2. Speech-to-Text (transcription only — NOT translation)
+    # Endpoint: POST /speech-to-text
+    # Cost: ~₹20 per hour of audio (transcription-only pricing)
+    # Why not /speech-to-text-translate: that endpoint can ONLY translate
+    # speech -> English (it has no target_language_code that produces Tamil,
+    # Hindi, etc. as output) — passing a non-English target to it silently
+    # returns an empty translation field. Real multi-language output requires
+    # a separate translation step (Gemini, in this pipeline) after transcription.
+    # Input: audio file bytes (wav/mp3/webm)
+    # Output: transcript in the language actually spoken + detected language code
     # ─────────────────────────────────────────────
-    async def stt_and_translate(
+    async def speech_to_text(
         self,
         audio_bytes: bytes,
         audio_filename: str,          # e.g. "recording.webm" — Sarvam uses extension for format
-        target_language_code: str,    # BCP-47 e.g. "ta-IN"
-        source_language_code: Optional[str] = None,  # None = auto-detect
+        source_language_code: Optional[str] = None,  # None/"unknown" = auto-detect
     ) -> dict:
         """
         Returns:
             {
-                "transcript": "यह एक परीक्षण है",
-                "translation": "This is a test",
-                "source_language": "hi-IN"
+                "transcript": "Hello, how are you?",
+                "source_language": "en-IN",
+                "language_probability": 0.98
             }
         Raises SarvamError on failure.
         """
         try:
-            # Sarvam's combined endpoint takes multipart form data
             files = {"file": (audio_filename, audio_bytes, _mime_for(audio_filename))}
             data = {
-                "target_language_code": target_language_code,
-                "model": "saaras:v2.5",         # Saarika v2 — best quality for STT
-                "with_timestamps": "false",    # We don't need word-level timestamps
-                "with_diarization": "false",   # Single speaker
+                "model": "saaras:v3",   # Latest model, auto-detects language when unspecified
+                "mode": "transcribe",   # Transcribe in the ORIGINAL spoken language (not translate-to-English)
             }
             if source_language_code:
                 data["language_code"] = source_language_code
 
             resp = await self._client.post(
-                "/speech-to-text-translate",
+                "/speech-to-text",
                 files=files,
                 data=data,
             )
@@ -137,13 +137,45 @@ class SarvamClient:
 
             return {
                 "transcript": result.get("transcript", ""),
-                "translation": result.get("translation", ""),
-                "source_language": result.get("language_code", source_language_code or "unknown"),
+                "source_language": result.get("language_code") or source_language_code or "unknown",
+                "language_probability": result.get("language_probability") or 0.0,
             }
         except httpx.TimeoutException:
-            raise SarvamError("STT+Translate timed out — audio may be too long")
+            raise SarvamError("Speech-to-text timed out — audio may be too long")
         except httpx.NetworkError as e:
-            raise SarvamError(f"Network error during STT+Translate: {e}")
+            raise SarvamError(f"Network error during speech-to-text: {e}")
+
+    # ─────────────────────────────────────────────
+    # 2b. Text Translation (Sarvam's own /translate — kept as a fallback option)
+    # Endpoint: POST /translate
+    # Limited to ~11-22 languages depending on model; primary translation now
+    # goes through Gemini (see gemini_client.py) for broader language support
+    # and to avoid Sarvam's per-request character caps on the free tier.
+    # ─────────────────────────────────────────────
+    async def translate_text(
+        self,
+        text: str,
+        source_language_code: str,
+        target_language_code: str,
+    ) -> str:
+        """Returns translated text. Raises SarvamError on failure."""
+        try:
+            resp = await self._client.post(
+                "/translate",
+                json={
+                    "input": text,
+                    "source_language_code": source_language_code or "auto",
+                    "target_language_code": target_language_code,
+                    "model": "sarvam-translate:v1",
+                    "mode": "formal",
+                },
+            )
+            _raise_for_status(resp)
+            return resp.json().get("translated_text", "")
+        except httpx.TimeoutException:
+            raise SarvamError("Translation timed out")
+        except httpx.NetworkError as e:
+            raise SarvamError(f"Network error during translation: {e}")
 
     # ─────────────────────────────────────────────
     # 3. Text-to-Speech (Bulbul v2)
@@ -160,8 +192,11 @@ class SarvamClient:
     ) -> bytes:
         """
         Returns raw audio bytes (WAV format).
-        Raises SarvamError if language has no TTS support or on API failure.
+        Raises SarvamError if language has no TTS support, text is empty, or on API failure.
         """
+        if not text or not text.strip():
+            raise SarvamError("Cannot synthesize speech from empty text")
+
         if not tts_supported(language_code):
             raise SarvamError(
                 f"TTS not supported for {language_code} in Bulbul v2. "

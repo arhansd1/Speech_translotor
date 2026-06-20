@@ -165,7 +165,11 @@ async def refine_translation(state: AgentState) -> dict:
             )
             resp.raise_for_status()
             data = resp.json()
-            refined = data["choices"][0]["message"]["content"].strip()
+            # refined = data["choices"][0]["message"]["content"].strip()
+            # FIX: Safely access nested dictionary keys and handle None
+            content = data.get("choices", [{}])[0].get("message", {}).get("content")
+            refined = (content or "").strip()
+
 
         return {
             "final_translation": refined,

@@ -32,8 +32,8 @@ from pydantic import BaseModel
 load_dotenv()
 
 from sarvam.client import SarvamClient, SarvamError
+from sarvam.gemini_client import translate_with_gemini, GeminiError
 from sarvam.languages import languages_as_dict
-from agent.graph import run_agent
 from memory.working_memory import memory, Turn
 from mcp.server import mcp_router
 from evals.run_evals import run_full_eval
@@ -52,10 +52,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Runs on startup and shutdown."""
     logger.info("Starting Sarvam Voice Translator backend")
-    # Pre-compile the LangGraph graph so first request isn't slow
-    from agent.graph import get_graph
-    get_graph()
-    logger.info("LangGraph agent compiled and ready")
 
     # Start self-ping cron (keeps Render free tier warm)
     ping_task = asyncio.create_task(_self_ping_loop())
@@ -166,10 +162,10 @@ async def translate_audio(
 ):
     """
     Full pipeline endpoint.
-    1. STT + Translate (single Sarvam API call)
-    2. Language ID on transcript
-    3. LangGraph agent (quality check → optional glossary → optional LLM refine)
-    4. TTS (Bulbul v2)
+    1. Speech-to-Text — Sarvam (transcribes in whatever language was spoken)
+    2. Language ID on transcript — Sarvam
+    3. Translation — Gemini (transcript -> target language, any language pair)
+    4. TTS — Sarvam Bulbul v2
     5. Update working memory
 
     Returns JSON with text fields + base64 audio (or null if TTS not supported).
@@ -193,19 +189,23 @@ async def translate_audio(
     # which is exactly what shows up in the browser as net::ERR_EMPTY_RESPONSE.
     try:
         async with SarvamClient(api_key) as client:
-            # ── Step 1: STT + Translate ──────────────────────────────────────
+            # ── Step 1: Speech-to-Text (transcription only, NOT translation) ──
             try:
-                stt_result = await client.stt_and_translate(
+                stt_result = await client.speech_to_text(
                     audio_bytes=audio_bytes,
                     audio_filename=filename,
-                    target_language_code=target_language,
                 )
             except SarvamError as e:
-                raise HTTPException(status_code=502, detail=f"STT+Translate failed: {e}")
+                raise HTTPException(status_code=502, detail=f"Speech-to-text failed: {e}")
 
             transcript = stt_result["transcript"]
-            raw_translation = stt_result["translation"]
             source_language = stt_result["source_language"]
+
+            if not transcript or not transcript.strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail="No speech detected in the recording — please try again and speak clearly.",
+                )
 
             # ── Step 2: Language ID (runs on transcript text) ────────────────
             try:
@@ -217,23 +217,33 @@ async def translate_audio(
                 detected_language = source_language
                 detection_confidence = 0.0
 
-            # ── Step 3: LangGraph agent ───────────────────────────────────────
-            session_context = memory.get_context(sid)
-            agent_result = await run_agent(
-                raw_translation=raw_translation,
-                transcript=transcript,
-                source_language=source_language,
-                target_language=target_language,
-                session_context=session_context,
-                api_key=api_key,
-            )
-            final_translation = agent_result["final_translation"]
+            # ── Step 3: Translation via Gemini ────────────────────────────────
+            # Sarvam's /speech-to-text-translate can ONLY output English, and its
+            # /translate endpoint has a limited language list + character caps.
+            # Gemini handles any source -> any target language pair reliably.
+            raw_translation = ""
+            translation_error = None
+            try:
+                raw_translation = await translate_with_gemini(
+                    text=transcript,
+                    source_language_code=detected_language or source_language,
+                    target_language_code=target_language,
+                )
+            except GeminiError as e:
+                translation_error = str(e)
+                logger.error(f"Gemini translation failed: {e}")
+
+            final_translation = raw_translation
+            agent_reasoning = "Translated via Gemini" if raw_translation else "Translation failed"
+            glossary_used = False
 
             # ── Step 4: TTS ────────────────────────────────────────────────────
             audio_bytes_out = None
-            tts_error = None
+            tts_error = translation_error
             from sarvam.languages import tts_supported
-            if tts_supported(target_language):
+            if not final_translation or not final_translation.strip():
+                tts_error = tts_error or "No translated text returned — nothing to synthesize"
+            elif tts_supported(target_language):
                 try:
                     audio_bytes_out = await client.text_to_speech(
                         text=final_translation,
@@ -265,13 +275,20 @@ async def translate_audio(
             "tts_available": audio_bytes_out is not None,
             "audio_base64": base64.b64encode(audio_bytes_out).decode() if audio_bytes_out else None,
             "audio_format": "wav",
-            "agent_reasoning": agent_result.get("agent_reasoning", ""),
-            "glossary_used": agent_result.get("glossary_used", False),
+            "agent_reasoning": agent_reasoning,
+            "glossary_used": glossary_used,
             "tts_error": tts_error,
         }
 
         response = JSONResponse(content=response_body)
-        response.headers["X-Agent-Reasoning"] = agent_result.get("agent_reasoning", "")[:500]
+        # HTTP header VALUES must be Latin-1/ASCII only (per the HTTP spec).
+        # agent_reasoning can contain the original transcript text (Hindi, Tamil, etc.)
+        # which is NOT ASCII — setting it directly as a header crashes uvicorn mid-response
+        # (RuntimeError: Invalid HTTP header value), which is exactly what produced
+        # net::ERR_EMPTY_RESPONSE on the frontend. Strip to ASCII-safe characters only;
+        # the full Unicode text is still available in the JSON body's agent_reasoning field.
+        safe_reasoning = agent_reasoning.encode("ascii", errors="ignore").decode("ascii")[:500]
+        response.headers["X-Agent-Reasoning"] = safe_reasoning
         response.headers["X-Session-ID"] = sid
         return response
 
@@ -311,41 +328,25 @@ async def translate_text(
 
     try:
         async with SarvamClient(api_key) as client:
-            # Translate
+            # Translate via Gemini (same engine as the audio pipeline, for consistency)
             try:
-                resp = await client._client.post(
-                    "/translate",
-                    json={
-                        "input": req.text,
-                        "source_language_code": req.source_language,
-                        "target_language_code": req.target_language,
-                        "model": "mayura:v1",
-                        "enable_preprocessing": True,
-                    },
+                raw_translation = await translate_with_gemini(
+                    text=req.text,
+                    source_language_code=req.source_language,
+                    target_language_code=req.target_language,
                 )
-                if resp.status_code >= 400:
-                    raise HTTPException(status_code=502, detail=f"Translate failed: {resp.text}")
-                raw_translation = resp.json().get("translated_text", "")
-            except SarvamError as e:
-                raise HTTPException(status_code=502, detail=str(e))
+            except GeminiError as e:
+                raise HTTPException(status_code=502, detail=f"Translation failed: {e}")
 
-            # Agent
-            session_context = memory.get_context(sid)
-            agent_result = await run_agent(
-                raw_translation=raw_translation,
-                transcript=req.text,
-                source_language=req.source_language,
-                target_language=req.target_language,
-                session_context=session_context,
-                api_key=api_key,
-            )
-            final_translation = agent_result["final_translation"]
+            final_translation = raw_translation
+            agent_reasoning = "Translated via Gemini" if raw_translation else "Translation failed"
+            glossary_used = False
 
             # TTS
             import base64
             from sarvam.languages import tts_supported
             audio_b64 = None
-            if tts_supported(req.target_language):
+            if final_translation and final_translation.strip() and tts_supported(req.target_language):
                 try:
                     audio_bytes = await client.text_to_speech(final_translation, req.target_language)
                     audio_b64 = base64.b64encode(audio_bytes).decode()
@@ -366,8 +367,8 @@ async def translate_text(
             "final_translation": final_translation,
             "tts_available": audio_b64 is not None,
             "audio_base64": audio_b64,
-            "agent_reasoning": agent_result.get("agent_reasoning", ""),
-            "glossary_used": agent_result.get("glossary_used", False),
+            "agent_reasoning": agent_reasoning,
+            "glossary_used": glossary_used,
         }
 
     except HTTPException:

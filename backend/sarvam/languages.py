@@ -20,16 +20,16 @@ class Language:
 # All 22 constitutionally scheduled Indian languages + English
 # Ordered by speaker population (largest first) so dropdown feels natural
 LANGUAGES: list[Language] = [
-    Language("hi-IN", "Hindi",      "Devanagari", tts_supported=True,  tts_speaker="meera"),
-    Language("bn-IN", "Bengali",    "Bengali",    tts_supported=True,  tts_speaker="ananya"),
-    Language("te-IN", "Telugu",     "Telugu",     tts_supported=True,  tts_speaker="arjun"),
-    Language("mr-IN", "Marathi",    "Devanagari", tts_supported=True,  tts_speaker="meera"),
-    Language("ta-IN", "Tamil",      "Tamil",      tts_supported=True,  tts_speaker="kavya"),
-    Language("gu-IN", "Gujarati",   "Gujarati",   tts_supported=True,  tts_speaker="ananya"),
-    Language("kn-IN", "Kannada",    "Kannada",    tts_supported=True,  tts_speaker="arjun"),
-    Language("ml-IN", "Malayalam",  "Malayalam",  tts_supported=True,  tts_speaker="kavya"),
-    Language("pa-IN", "Punjabi",    "Gurmukhi",   tts_supported=True,  tts_speaker="meera"),
-    Language("or-IN", "Odia",       "Odia",       tts_supported=True,  tts_speaker="ananya"),
+    Language("hi-IN", "Hindi",      "Devanagari", tts_supported=True,  tts_speaker="anushka"),
+    Language("bn-IN", "Bengali",    "Bengali",    tts_supported=True,  tts_speaker="manisha"),
+    Language("te-IN", "Telugu",     "Telugu",     tts_supported=True,  tts_speaker="arya"),
+    Language("mr-IN", "Marathi",    "Devanagari", tts_supported=True,  tts_speaker="vidya"),
+    Language("ta-IN", "Tamil",      "Tamil",      tts_supported=True,  tts_speaker="anushka"),
+    Language("gu-IN", "Gujarati",   "Gujarati",   tts_supported=True,  tts_speaker="manisha"),
+    Language("kn-IN", "Kannada",    "Kannada",    tts_supported=True,  tts_speaker="arya"),
+    Language("ml-IN", "Malayalam",  "Malayalam",  tts_supported=True,  tts_speaker="vidya"),
+    Language("pa-IN", "Punjabi",    "Gurmukhi",   tts_supported=True,  tts_speaker="anushka"),
+    Language("od-IN", "Odia",       "Odia",       tts_supported=True,  tts_speaker="manisha"),
     Language("ur-IN", "Urdu",       "Nastaliq",   tts_supported=False),
     Language("as-IN", "Assamese",   "Bengali",    tts_supported=False),
     Language("mai-IN","Maithili",   "Devanagari", tts_supported=False),
@@ -42,7 +42,7 @@ LANGUAGES: list[Language] = [
     Language("mni-IN","Manipuri",   "Meitei",     tts_supported=False),
     Language("brx-IN","Bodo",       "Devanagari", tts_supported=False),
     Language("sa-IN", "Sanskrit",   "Devanagari", tts_supported=False),
-    Language("en-IN", "English",    "Latin",      tts_supported=True,  tts_speaker="arjun"),
+    Language("en-IN", "English",    "Latin",      tts_supported=True,  tts_speaker="hitesh"),
 ]
 
 # Quick lookups used by the Sarvam client
@@ -59,7 +59,7 @@ def get_speaker(code: str) -> str:
     lang = get_language(code)
     if lang and lang.tts_speaker:
         return lang.tts_speaker
-    return "meera"  # safe fallback
+    return "anushka"  # safe fallback
 
 def languages_as_dict() -> list[dict]:
     """Serializable list for the /languages API endpoint."""
